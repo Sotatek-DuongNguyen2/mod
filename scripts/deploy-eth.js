@@ -1,7 +1,7 @@
 const hre = require("hardhat");
 
 async function main() {
-  const Contract = await hre.ethers.getContractFactory("SuperBrainCapitalDao");
+  const Contract = await hre.ethers.getContractFactory("XCapitalDao");
   const contract = await Contract.deploy();
 
   await contract.deployed();

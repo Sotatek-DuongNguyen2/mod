@@ -1,34 +1,3 @@
-/**
-
-SuperBrain Capital Dao: $SBC
-- Deflationary DeFi-as-a-Service (DaaS) Token, with 65% supply burned to 0x0dEaD
-- Our advisors will bootstrap the investments in our initial phase. We invest on multiple chains and return the profits to $SBC holders.
-
-Tokenomics:
-- Buy Tax / Sell Tax: 14%
-    - 5% of each buy goes to FTM reflections
-    - 5% of each sell to treasury wallet
-    - 4% to the liquidity pool.
-
-Website:
-http://superbrain.capital
-
-Earning Dashboard:
-https://superbrain.capital/dashboard
-
-Telegram:
-https://t.me/SBC.Official
-
-Twitter:
-https://twitter.com/SuperBrain_C
-
-Medium:
-https://superbraincapital.medium.com/
-
-Credit to ACYC (AllCoinsYield Capital), MCC (Multi-Chain Capital) + SAFEMOON (SafeMoon)
-
-*/
-
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
@@ -48,7 +17,7 @@ interface IDividendDistributor {
 }
 
 
-contract SuperBrainCapitalDividendTracker is IDividendDistributor {
+contract XCapitalDividendTracker is IDividendDistributor {
     using SafeMath for uint256;
 
     address _token;
@@ -72,8 +41,8 @@ contract SuperBrainCapitalDividendTracker is IDividendDistributor {
     uint256 public dividendsPerShareAccuracyFactor = 10 ** 36;
 
     uint256 public minPeriod = 1 hours;
-    uint256 public minDistribution = 200000000000000; // 0.0002 FTM minimum auto send  
-    uint256 public minimumTokenBalanceForDividends = 1000000 * (10**9); // Must hold 1000,000 token to receive FTM
+    uint256 public minDistribution = 200000000000000; // 0.0002 ETH minimum auto send  
+    uint256 public minimumTokenBalanceForDividends = 1000000 * (10**9); // Must hold 1000,000 token to receive ETH
 
     uint256 currentIndex;
 
@@ -115,8 +84,8 @@ contract SuperBrainCapitalDividendTracker is IDividendDistributor {
     }
 
     function manualSendDividend(uint256 amount, address holder) external override onlyToken {
-        uint256 contractFTMBalance = address(this).balance;
-        payable(holder).transfer(amount > 0 ? amount : contractFTMBalance);
+        uint256 contractETHBalance = address(this).balance;
+        payable(holder).transfer(amount > 0 ? amount : contractETHBalance);
     }
 
     function deposit() external payable override onlyToken {
@@ -125,6 +94,37 @@ contract SuperBrainCapitalDividendTracker is IDividendDistributor {
         totalDividends = totalDividends.add(amount);
         dividendsPerShare = dividendsPerShare.add(dividendsPerShareAccuracyFactor.mul(amount).div(totalShares));
     }
+
+    // **********************
+    // *Code for auto reward*
+    // **********************
+
+    // function process() external onlyToken {
+    //     uint256 gas = 500000; //can change this, but should not be too much
+    //     uint256 shareholderCount = shareholders.length;
+
+    //     if(shareholderCount == 0) { return; }
+
+    //     uint256 gasUsed = 0;
+    //     uint256 gasLeft = gasleft();
+
+    //     uint256 iterations = 0;
+
+    //     while(gasUsed < gas && iterations < shareholderCount) {
+    //         if(currentIndex >= shareholderCount){
+    //             currentIndex = 0;
+    //         }
+
+    //         if(shouldDistribute(shareholders[currentIndex])){
+    //             distributeDividend(shareholders[currentIndex]);
+    //         }
+
+    //         gasUsed = gasUsed.add(gasLeft.sub(gasleft()));
+    //         gasLeft = gasleft();
+    //         currentIndex++;
+    //         iterations++;
+    //     }
+    // }
     
     function shouldDistribute(address shareholder) internal view returns (bool) {
         return shareholderClaims[shareholder] + minPeriod < block.timestamp
@@ -190,13 +190,17 @@ contract SuperBrainCapitalDividendTracker is IDividendDistributor {
                                                     0;
         _totalDistributed = totalDistributed;
     }
+
+    // ***********************
+    // *Code for claim reward*
+    // ***********************
     
     function claimDividend(address holder) external override {
         distributeDividend(holder);
     }
 }
 
-contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
+contract XCapitalDao is Ownable, IERC20 {
     using SafeMath for uint256;
     
 	struct FeeSet {
@@ -206,14 +210,14 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
 		uint256 totalFee;
 	}
     
-    address WFTM = 0x21be370D5312f44cB42ce377BC9b8a0cEF1A4C83; //WFTM
+    address WETH;
     address DEAD = 0x000000000000000000000000000000000000dEaD;
     address ZERO = 0x0000000000000000000000000000000000000000;
 
     mapping (address => uint256) _balances;
     mapping (address => mapping (address => uint256)) _allowances;
 
-    string _name = "SuperBrain Capital Dao";
+    string _name = "X Capital Dao";
     string _symbol = "$SBC";
     uint8 constant _decimals = 9;
     uint256 public _totalSupply = 100000000000 * (10 ** _decimals);
@@ -224,6 +228,10 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
     mapping (address => bool) excludeMaxTxn;
     mapping (address => bool) excludeDividend;
 
+    // *******************************
+    // *declare whitelist & blacklist*
+    // *******************************
+
     // mapping (address => bool) whitelist;
     // mapping (address => bool) blacklist;
     
@@ -231,14 +239,13 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
 	FeeSet public sellFees;
     uint256 feeDenominator = 100;
     
-    address treasuryWallet = address(0xdE9FF8a2ea97cD1e366ff3e5D840fEA724865299); //change this
+    address treasuryWallet = address(); //change this
     address liquidityWallet;
 
-    IUniswapV2Router02 public router = IUniswapV2Router02(0xF491e7B69E4244ad4002BC14e878a34207E38c29); //spooky swap
-    address factory = 0x152eE697f2E276fA89E96742e9bB9aB1F2E61bE3; //spooky factory
+    IUniswapV2Router02 public router;
     address pair;
 
-    SuperBrainCapitalDividendTracker public dividendTracker;
+    XCapitalDividendTracker public dividendTracker;
 
     uint256 lastSwap;
     uint256 interval = 5 minutes;
@@ -252,16 +259,29 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
     
     modifier swapping() { inSwap = true; _; inSwap = false; }
 
+    
+
     modifier open(address from, address to) {
-        require(isOpen || from == owner() || to == owner(), "Not Open"); //add whitelist,blacklist conditions (if needed)
+        // *******************************
+        // *this check every transactions*
+        // *******************************
+        require(isOpen || from == owner() || to == owner(), "Not Open"); 
+        // ************************************************
+        // *add whitelist,blacklist conditions (if needed)*
+        // ************************************************
+        // require(isOpen || from == owner() || to == owner() || whitelist[from] || whitelist[to], "Not Open");
+        // require(!blacklist[from] && !blacklist[to],"Blacklisted");
         _;
     }
 
     constructor () {
-        pair = IUniswapV2Factory(factory).createPair(WFTM, address(this));
+
+        router = IUniswapV2Router02(0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D);
+        WETH = router.WETH();
+        pair = IUniswapV2Factory(router.factory()).createPair(WETH, address(this));
         _allowances[address(this)][address(router)] = ~uint256(0);
 
-        dividendTracker = new SuperBrainCapitalDividendTracker();
+        dividendTracker = new XCapitalDividendTracker();
 
         address owner_ = msg.sender;
         liquidityWallet = owner_;
@@ -277,6 +297,12 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
         excludeDividend[pair] = true;
         excludeDividend[address(this)] = true;
         excludeDividend[DEAD] = true;
+
+        // ************************************
+        // *add owner to whitelist (if needed)*
+        // ************************************
+        //whitelist[msg.sender] = true;
+        //whitelist[address(this)] = true;
         
 		setBuyFees(5, 5, 4);
 		setSellFees(5, 5, 4);
@@ -325,9 +351,34 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
         return _transferFrom(sender, recipient, amount);
     }
 
+    //***********************************************
+    //*add a list of people to whitelist & blacklist*
+    //***********************************************
+
+    // function addWhiteList(address[] calldata _users, bool exempt) external onlyOwner {
+    //     for(uint8 i = 0; i < _users.length; i++) {
+    //         whitelist[_users[i]] = exempt;
+    //     }
+    // }
+
+    // function addBlackList(address[] calldata _users, bool exempt) external onlyOwner {
+    //     for(uint8 i = 0; i < _users.length; i++) {
+    //         blacklist[_users[i]] = exempt;
+    //     }
+    // }
+
+
     function openTrade() external onlyOwner {
-        isOpen = true; //could send a param to set isOpen to false as well, if need to block all transfer
+        isOpen = true; 
     }
+
+    //**********************************************************************************
+    //*could send a param to set isOpen to false as well, if need to block all transfer*
+    //**********************************************************************************
+
+    // function setOpenTrade(bool _isOpen) external onlyOwner {
+    //     isOpen = _isOpen; 
+    // }
 
     function _transferFrom(address sender, address recipient, uint256 amount) internal open(sender, recipient) returns (bool) {
         if(inSwap){ return _basicTransfer(sender, recipient, amount); }
@@ -345,6 +396,11 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
 
         if(!excludeDividend[sender]){ try dividendTracker.setShare(sender, _balances[sender]) {} catch {} }
         if(!excludeDividend[recipient]){ try dividendTracker.setShare(recipient, _balances[recipient]) {} catch {} }
+
+        //********************
+        //*Enable auto reward*
+        //********************
+        // try dividendTracker.process() {} catch {}
 
         emit Transfer(sender, recipient, amountReceived);
         return true;
@@ -411,7 +467,7 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
 
         address[] memory path = new address[](2);
         path[0] = address(this);
-        path[1] = WFTM;
+        path[1] = WETH;
 
         uint256 balanceBefore = address(this).balance;
 
@@ -423,13 +479,13 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
             block.timestamp
         );
 
-        uint256 amountFTM = address(this).balance.sub(balanceBefore);
+        uint256 amountETH = address(this).balance.sub(balanceBefore);
 
-        uint256 totalFTMFee = totalFee.sub(dynamicLiquidityFee.div(2));
+        uint256 totalETHFee = totalFee.sub(dynamicLiquidityFee.div(2));
         
-        uint256 amountFTMLiquidity = amountFTM.mul(dynamicLiquidityFee).div(totalFTMFee).div(2);
+        uint256 amountETHLiquidity = amountETH.mul(dynamicLiquidityFee).div(totalETHFee).div(2);
         if(amountToLiquify > 0){
-            router.addLiquidityETH{value: amountFTMLiquidity}(
+            router.addLiquidityETH{value: amountETHLiquidity}(
                 address(this),
                 amountToLiquify,
                 0,
@@ -439,11 +495,11 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
             );
         }
         
-        uint256 amountFTMReflection = amountFTM.mul(reflectionFee).div(totalFTMFee);
-        try dividendTracker.deposit{value: amountFTMReflection}() {} catch {}
+        uint256 amountETHReflection = amountETH.mul(reflectionFee).div(totalETHFee);
+        try dividendTracker.deposit{value: amountETHReflection}() {} catch {}
         
-        uint256 amountFTMTreasury = address(this).balance;
-        payable(treasuryWallet).transfer(amountFTMTreasury);
+        uint256 amountETHTreasury = address(this).balance;
+        payable(treasuryWallet).transfer(amountETHTreasury);
     }
 
     function setExcludeDividend(address holder, bool exempt) external onlyOwner {
@@ -477,7 +533,7 @@ contract SuperBrainCapitalDaoFTM is Ownable, IERC20 {
         IERC20(_token).transfer(msg.sender, _amount);
     }
 
-    function rescueFTM(uint256 _amount) external onlyOwner{
+    function rescueETH(uint256 _amount) external onlyOwner{
         payable(msg.sender).transfer(_amount);
     }
 
